@@ -1,62 +1,52 @@
-name: Build/release
+name: Build Windows EXE
 
 on:
   push:
     branches:
       - main
+  # 添加触发条件，当打标签时也触发构建
+  pull_request:
+    branches:
+      - main
+  release:
+    types: [created]
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+  release-windows:
+    runs-on: windows-latest
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v4
         with:
           submodules: "recursive"
+          fetch-depth: 0
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'latest'
-          # cache: 'yarn'
+          node-version: '20'  # 指定一个稳定的 Node.js 版本
+          cache: 'npm'
 
-      - name: Build/release Electron app
+      - name: Install dependencies
+        run: npm ci  # 使用 ci 而不是 install 以获得更可靠的构建
+
+      - name: Build Windows EXE
         uses: samuelmeuli/action-electron-builder@v1.6.0
         with:
-          # GitHub token, automatically provided to the action
-          # (No need to define this secret in the repo settings)
-          github_token: ${{ secrets.access_token }}
-          # build_script_name: 'electron:prebuild'
-          # If the commit is tagged with a version (e.g. "v1.0.0"),
-          # release the app after building
+          # GitHub token for releasing
+          github_token: ${{ secrets.GITHUB_TOKEN }}  # 使用默认的 GITHUB_TOKEN
+          # 只构建 Windows 目标
+          args: "--win --x64"
+          # 只在打标签时发布 release
           release: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      - name: Upload Artifact (macOS)
+      - name: Upload Artifact (Windows EXE)
         uses: actions/upload-artifact@v4
         with:
-          name: zyplayer-mac
-          path: ./dist/*-mac-*.dmg
-          if-no-files-found: ignore
-
-      - name: Upload Artifact (Windows)
-        uses: actions/upload-artifact@v4
-        with:
-          name: zyplayer-win
-          path: ./dist/*-win-*.exe
-          if-no-files-found: ignore
-
-      - name: Upload Artifact (Linux)
-        uses: actions/upload-artifact@v4
-        with:
-          name: zyplayer-linux
+          name: zyplayer-windows-exe
           path: |
-            ./dist/*.AppImage
-            ./dist/*.deb
-            ./dist/*.rpm
-          if-no-files-found: ignore
+            ./dist/*.exe
+            ./dist/*.exe.blockmap
+          if-no-files-found: error
+          retention-days: 7
